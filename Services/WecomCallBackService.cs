@@ -324,6 +324,99 @@
             return EncryptCallBackData(sb.ToString());
         }
 
+
+        /// <summary>
+        /// 解析负载
+        /// </summary>
+        /// <param name="payload"></param>
+        /// <returns></returns>
+        public MessageReceive ResolvePayload(string payload)
+        {
+            try
+            {
+                XmlDocument xmlDocument = new XmlDocument();
+                xmlDocument.LoadXml(payload);
+                XmlNode root = xmlDocument.FirstChild!;
+
+                var createTime = root["CreateTime"].InnerText ?? "0";
+                var agentId = root["AgentID"].InnerText ?? "0";
+                var model = new MessageReceive
+                {
+                    Payload = payload,
+                    CreateTime = Convert.ToInt32(createTime),
+                    AgentId = Convert.ToInt32(agentId),
+                    MsgType = root["MsgType"]?.InnerText ?? "",
+                    EventName = root["Event"]?.InnerText ?? "",
+                    ChangeType = root["ChangeType"]?.InnerText ?? "",
+                    fromUserName = root["FromUserName"]?.InnerText ?? "",
+                    ToUserName = root["ToUserName"]?.InnerText ?? "",
+                    ExpiredTime = root["ExpiredTime"]?.InnerText ?? "",
+                    Latitude = root["Latitude"]?.InnerText ?? "",
+                    Longitude = root["Longitude"]?.InnerText ?? "",
+                    Precision = root["Precision"]?.InnerText ?? "",
+                    Content = root["Content"]?.InnerText ?? "",
+                    MessageId = root["MsgId"]?.InnerText ?? "",
+                    EventKey = root["EventKey"]?.InnerText ?? "",
+                };
+
+
+
+                //异步任务完成通知
+                if (model.EventName == "batch_job_result")
+                {
+                    model.BatchJob = new BatchJob()
+                    {
+                        JobId = root["BatchJob"]["JobId"]?.InnerText ?? "",
+                        JobType = root["BatchJob"]["JobType"]?.InnerText ?? "",
+                        ErrCode = root["BatchJob"]["ErrCode"]?.InnerText ?? "",
+                        ErrMsg = root["BatchJob"]["ErrMsg"]?.InnerText ?? "",
+                    };
+                }
+
+                //更新标签
+                if (model.EventName == "change_contact" && model.ChangeType == "update_tag")
+                {
+                    var tagId = root["UpdateTag"]["TagId"]?.InnerText ?? "";
+                    model.UpdateTag = new UpdateTag()
+                    {
+                        TagId = Convert.ToInt32(tagId),
+                        AddPartyItems = (root["UpdateTag"]["AddPartyItems"]?.InnerText ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                        DelPartyItems = (root["UpdateTag"]["DelPartyItems"]?.InnerText ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                        AddUserItems = (root["UpdateTag"]["AddUserItems"]?.InnerText ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                        DelUserItems = (root["UpdateTag"]["DelUserItems"]?.InnerText ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).ToList(),
+                    };
+                }
+
+
+                //用户信息
+                if (model.EventName == "change_contact" && model.ChangeType.EndsWith("te_user"))
+                {
+                    model.UpdateUser = new UpdateUser()
+                    {
+                        UserId = root["UserID"]?.InnerText ?? "",
+                        NewUserId = root["NewUserId"]?.InnerText ?? "",
+                        Department = (root["Department"]?.InnerText ?? "").Split(',').Where(x => !string.IsNullOrEmpty(x)).Select(x => Convert.ToInt32(x)).ToList(),
+                    };
+                }
+
+                //扫码
+                if(model.EventName == "scancode_push" || model.EventName == "scancode_waitmsg")
+                {
+                    model.ScanCodeInfo = new ScanCodeInfo()
+                    {
+                        ScanType = root["ScanCodeInfo"]?["ScanType"]?.InnerText ?? "",
+                        ScanResult = root["ScanCodeInfo"]?["ScanResult"]?.InnerText ?? "",
+                    };
+                }
+
+                return model;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+
         #endregion
 
         /// <summary>

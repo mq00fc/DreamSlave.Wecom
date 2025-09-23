@@ -12,9 +12,11 @@
 - [x] 企业微信Js-ticket
 - [x] 企业微信加密回调解析
 - [x] 企业微信加密回调响应（仅限文本）
+- [x] 企业微信回调接口
 - [x] 获取企业授权用户登录身份
 - [x] 获取企业用户敏感身份信息
 - [x] 获取企业Web登录的用户信息
+- [x] 企业微信机器人（消息推送）
 
 > [!NOTE]
 >
@@ -33,7 +35,7 @@
 
 
 
-### 使用教程
+### 使用教程->企业微信回调/鉴权
 
 该库提供了两种的注入方式方便使用者调用
 
@@ -157,7 +159,132 @@ public async Task<IActionResult> PostCallBack([FromQuery] Callback callback)
     var data = _wecomCallBackService.DecryptCallBackData(payload);
     _logger.LogInformation("消息内容：{0}", data);
 	//这里的data需要自行处理
-    return Content(_wecomCallBackService.SendTextMessage("", ""), "text/plain", Encoding.UTF8);
+    return Content(await _oauthExec.HandleMessageAsync(data), "text/plain", System.Text.Encoding.UTF8);
 }
+```
+
+
+
+这里的_oauthExec需要进行注入，如果是单实例注入则直接注入`WecomCommandExecService`即可
+
+为了方便测试，下面放两个使用示例，只需要按照下面的写法进行编写即可，库会自动扫描（反射）处理
+
+
+
+text内容
+
+```C#
+public class DeveloperHandler
+{
+    [WecomTextCommand("id")]
+    public async Task<string> HandleOpenIdCommandAsync(IServiceProvider serviceProvider, MessageReceive messageReceive)
+    {
+        return await Task.FromResult("您好,您的企业微信Id为：" + messageReceive.fromUserName);
+    }
+}
+```
+
+event内容
+
+```C#
+public class EventHandler
+{
+    [WecomEventCommand("enter_agent")]
+    public async Task<string> OnEnterAgent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您进入了{message.AgentId}");
+    }
+
+
+    [WecomEventCommand("location")]
+    public async Task<string> OnLocationEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您的位置是{message.Latitude}/{message.Longitude} {message.Precision}");
+    }
+
+
+    [WecomEventCommand("view")]
+    public async Task<string> OnViewEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您点击了<a href='{message.EventKey}'>菜单</a>");
+    }
+
+    [WecomEventCommand("click")]
+    public async Task <string> OnClickEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您点击了菜单 {message.EventKey}");
+    }
+
+
+    [WecomEventCommand("view_miniprogram")]
+    public async Task<string> OnViewMiniprogramEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您点击了小程序 {message.EventKey}");
+    }
+
+
+    [WecomEventCommand("scancode_push")]
+    public async Task<string> OnScanCodePushEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您扫码了 {message.ScanCodeInfo.ScanResult}");
+    }
+
+    [WecomEventCommand("scancode_waitmsg")]
+    public async Task<string> OnScanCodeWaitMsgEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"您扫码了 {message.ScanCodeInfo.ScanResult}");
+    }
+
+
+
+    [WecomEventCommand("change_contact")]
+    public async Task<string> OnChangeContactEvent(IServiceProvider provider, MessageReceive message)
+    {   
+        return await Task.FromResult($"通讯录变更事件 {message.ChangeType}");
+    }
+
+
+    [WecomEventCommand("batch_job_result")]
+    public async Task<string> OnBatchJobResultEvent(IServiceProvider provider, MessageReceive message)
+    {
+        return await Task.FromResult($"批量任务结果 {message.BatchJob.JobId} {message.BatchJob.JobType}");
+    }
+}
+```
+
+
+
+### 使用教程-机器人推送
+
+在`Program.cs`中添加下列代码，可以添加多个机器人只需要修改name即可
+
+> [!IMPORTANT]
+>
+> 机器人推送除了`模板卡片类型`，其余所有类型都已内建支持，另外机器人推送的返回参数只告知是否成功会忽略其他的信息
+
+
+
+```C#
+builder.Services.AddWecomBot("运维机器人", "3297fdf1-baf5-4da7-b6ca-68bfa7f65af4");
+```
+
+
+
+然后在接口或者实现的服务中进行下列操作
+
+```C#
+private readonly IWecomBotService _wecomBotService;
+public WecomController(ILogger<WecomController> logger,
+    [FromKeyedServices("运维机器人")] IWecomBotService wecomBotService)
+{
+    _logger = logger;
+    _wecomBotService = wecomBotService;
+}
+```
+
+最后调用方法即可
+
+```C#
+var flag = await _wecomBotService.SendTextMessageToBotAsync(keyword);
 ```
 

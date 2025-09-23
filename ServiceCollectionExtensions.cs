@@ -2,6 +2,12 @@
 {
     public static class ServiceCollectionExtensions
     {
+        /// <summary>
+        /// 注入企业微信服务，单实例模式
+        /// </summary>
+        /// <param name="services"></param>
+        /// <param name="configure"></param>
+        /// <returns></returns>
         public static IServiceCollection AddWecomService(this IServiceCollection services, Action<Models.Config> configure)
         {
             services.AddMemoryCache();
@@ -30,15 +36,25 @@
 
             services.AddSingleton<IWecomOAuth2Service, WecomOAuth2Service>();
             services.AddSingleton<IWecomCallBackService, WecomCallBackService>();
+            services.TryAddSingleton<IWecomFactory, WecomFactory>();
+
             //执行自动刷新
             services.AddHostedService<WecomRefreshHostService>();
 
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
+            //注册单例服务并进行托管
+            services.AddSingleton<WecomCommandExecService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<WecomCommandExecService>>();
+                var opts = sp.GetRequiredService<IOptions<Models.Config>>();
+                var cb = sp.GetRequiredService<IWecomCallBackService>();
+                return new WecomCommandExecService(logger, opts, sp, cb, "default");
+            });
+
             return services;
         }
 
         /// <summary>
-        /// 支持多实例（类似 HttpClientFactory 的命名用法），可通过名称区分不同的企业微信配置。
+        /// 注入企业微信服务，支持多实例模式
         /// 用法：
         /// services.AddWecomService("appA", cfg => { ... });
         /// services.AddWecomService("appB", cfg => { ... });
@@ -54,6 +70,11 @@
             services.AddOptions<Models.Config>(name)
                     .Configure(configure)
                     .ValidateOnStart();
+
+            // 从 configure 生成配置快照，用于条件注册
+            var cfgSnapshot = new Models.Config();
+            configure(cfgSnapshot);
+
 
             // 确保 HttpClient 存在（共享同一个 wecom_client）
             services.AddHttpClient(name: "wecom_client", client =>
@@ -96,6 +117,9 @@
                     Options.Create(optionsMonitor.Get(name)));
             });
 
+
+            services.TryAddSingleton<IWecomFactory, WecomFactory>();
+
             // 为该名称添加一个独立的后台刷新任务
             services.AddHostedService(sp =>
             {
@@ -108,7 +132,58 @@
                     Options.Create(optionsMonitor.Get(name)));
             });
 
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
+
+            // 注册命令执行服务（按 name 隔离）并进行托管
+            services.AddKeyedSingleton<WecomCommandExecService>(name, (sp, _) =>
+            {
+                var logger = sp.GetRequiredService<ILogger<WecomCommandExecService>>();
+                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
+                var callBackSvc = sp.GetRequiredKeyedService<IWecomCallBackService>(name);
+                return new WecomCommandExecService(
+                    logger,
+                    Options.Create(optionsMonitor.Get(name)),
+                    sp,
+                    callBackSvc,
+                    name);
+            });
+            services.AddHostedService(sp => sp.GetRequiredKeyedService<WecomCommandExecService>(name));
+            return services;
+        }
+
+
+        /// <summary>
+        /// 注入企业微信机器人服务，支持多实例模式
+        /// </summary>
+        /// <param name="services"></param>
+        /// <param name="botName">机器人名称</param>
+        /// <param name="botKey">机器人url(仅需要?key=后的值)</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static IServiceCollection AddWecomBot(this IServiceCollection services, string botName, string botKey)
+        {
+            if (string.IsNullOrWhiteSpace(botKey)) throw new ArgumentException("botKey cannot be null or whitespace", nameof(botKey));
+            if (string.IsNullOrWhiteSpace(botName)) botName = "default";
+            // 确保 HttpClient 存在（共享同一个 wecom_bot）
+            services.AddHttpClient(name: "wecom_bot", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(3);
+                client.DefaultRequestHeaders.Add("User-Agent", "DreamSlave.Wecom");
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                UseCookies = false,
+                AllowAutoRedirect = true,
+                AutomaticDecompression = DecompressionMethods.All,
+                MaxResponseHeadersLength = 1024,
+                MaxRequestContentBufferSize = 1024,
+                CheckCertificateRevocationList = true,
+                MaxConnectionsPerServer = 500,
+            });
+            services.AddKeyedSingleton<IWecomBotService, WecomBotService>(botName, (sp, _) =>
+            {
+                var logger = sp.GetRequiredService<ILogger<WecomBotService>>();
+                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                return new WecomBotService(logger, httpFactory, botName, botKey);
+            });
             return services;
         }
     }

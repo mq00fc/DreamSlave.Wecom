@@ -14,5 +14,6 @@
         string GenerateSignature(string token, Callback callback);
         string SendTextMessage(string userId, string content);
         string SendTextMessage(string userId, string content, string corpId);
+        MessageReceive ResolvePayload(string payload);
     }
 }

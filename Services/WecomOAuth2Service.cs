@@ -46,6 +46,12 @@
         /// <returns></returns>
         public JsapiTicketDto GetJsapiTicketDto(string url)
         {
+            if (_options.Value.AgentId < 1)
+            {
+                _logger.LogError("获取JsapiTicketDto失败:AgentId未配置");
+                return null;
+            }
+
             var ticket = GetTicket();
             if (string.IsNullOrEmpty(ticket))
             {

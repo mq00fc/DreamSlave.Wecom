@@ -2,6 +2,7 @@
 global using System.Xml;
 global using System.Text;
 global using System.Text.Json;
+global using System.Reflection;
 global using System.Text.Json.Serialization;
 global using System.Security.Cryptography;
 
@@ -19,3 +20,6 @@ global using DreamSlave.Wecom.Models.Response.UserInfo;
 global using DreamSlave.Wecom.Models.WebDto;
 global using DreamSlave.Wecom.Hosts;
 global using DreamSlave.Wecom.Models.Request;
+global using DreamSlave.Wecom.Attributes;
+global using DreamSlave.Wecom.Models.CallBack;
+global using DreamSlave.Wecom.Models.Request.Bot;
