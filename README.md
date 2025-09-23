@@ -6,6 +6,19 @@
 
 
 
+### 已实现的功能
+
+- [x] 企业微信Token
+- [x] 企业微信Js-ticket
+- [x] 企业微信加密回调解析
+- [x] 企业微信加密回调响应（仅限文本）
+
+> [!NOTE]
+>
+> 更多功能敬请期待
+
+
+
 ### Token/Ticket处理方式
 
 当`cfg.AutoRefresh = true;`时，将在后台启动`BackgroundService`服务并在每60分钟自动刷新一次
