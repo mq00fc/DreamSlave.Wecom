@@ -12,6 +12,9 @@
 - [x] 企业微信Js-ticket
 - [x] 企业微信加密回调解析
 - [x] 企业微信加密回调响应（仅限文本）
+- [x] 获取企业授权用户登录身份
+- [x] 获取企业用户敏感身份信息
+- [x] 获取企业Web登录的用户信息
 
 > [!NOTE]
 >
@@ -34,6 +37,16 @@
 ### 使用教程
 
 该库提供了两种的注入方式方便使用者调用
+
+
+
+可从Nuget中下载[此库](https://www.nuget.org/packages/DreamSlave.Wecom) 
+
+> [!CAUTION]
+>
+> 请勿使用1.1.1版本以前的版本
+
+
 
 
 
@@ -108,6 +121,44 @@ public WecomController(ILogger<WecomController> logger,
     _wecomCallBackService = _wecomFactory.GetCallback("oauth2");
     _wecomTokenService = _wecomFactory.GetOAuth2("oauth2");
     _addressCallBackService = _wecomFactory.GetCallback("adress");
+}
+```
+
+
+
+
+
+#### 企业微信回调WebApi示例
+
+```C#
+/// <summary>
+/// 企业微信签名回调
+/// </summary>
+/// <param name="callback"></param>
+/// <returns></returns>
+[HttpGet("/api/wecom/callback")]
+public IActionResult GetCallBack([FromQuery] Callback callback)
+{
+    var flag = _wecomCallBackService.CheckSignature(callback);
+    if (!flag)
+    {
+        return Content("签名不符合验证!", "text/plain", System.Text.Encoding.UTF8);
+    }
+
+    var data = _wecomCallBackService.DecryptEchostr(callback);
+    return Content(data, "text/plain", Encoding.UTF8);
+}
+
+
+[HttpPost("/api/wecom/callback")]
+public async Task<IActionResult> PostCallBack([FromQuery] Callback callback)
+{
+    using var reader = new StreamReader(Request.Body);
+    var payload = await reader.ReadToEndAsync();
+    var data = _wecomCallBackService.DecryptCallBackData(payload);
+    _logger.LogInformation("消息内容：{0}", data);
+	//这里的data需要自行处理
+    return Content(_wecomCallBackService.SendTextMessage("", ""), "text/plain", Encoding.UTF8);
 }
 ```
 

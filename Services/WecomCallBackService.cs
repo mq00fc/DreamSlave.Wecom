@@ -254,8 +254,6 @@
 
                 string encryptData = root["Encrypt"]?.InnerText ?? "";
 
-                _logger.LogDebug("解密数据：{0}", encryptData);
-
                 //如果企业id不相符的话则返回空字符串
                 var data = AesDecrypt(encryptData, aesKey, out string id);
                 if (id != corpId)

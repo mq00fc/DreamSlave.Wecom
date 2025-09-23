@@ -1,0 +1,11 @@
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\bin\Release\net9.0\DreamSlave.Wecom.deps.json
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\bin\Release\net9.0\DreamSlave.Wecom.dll
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.csproj.AssemblyReference.cache
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.AssemblyInfoInputs.cache
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.AssemblyInfo.cs
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.csproj.CoreCompileInputs.cache
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.sourcelink.json
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\DreamSlave.Wecom.dll
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\refint\DreamSlave.Wecom.dll
+C:\Users\dreamslave\Desktop\DreamSlave.Wecom\DreamSlave.Wecom\obj\Release\net9.0\ref\DreamSlave.Wecom.dll
