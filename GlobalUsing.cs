@@ -23,3 +23,5 @@ global using DreamSlave.Wecom.Models.Request;
 global using DreamSlave.Wecom.Attributes;
 global using DreamSlave.Wecom.Models.CallBack;
 global using DreamSlave.Wecom.Models.Request.Bot;
+global using DreamSlave.Wecom.Models.Response.Message;
+global using DreamSlave.Wecom.Models.Request.Message;

@@ -7,5 +7,7 @@ namespace DreamSlave.Wecom.Services
     {
         IWecomOAuth2Service GetOAuth2(string name);
         IWecomCallBackService GetCallback(string name);
+        IWecomBotService GetBotService(string name);
+        IWecomMessageService GetMessageService(string name);
     }
 }

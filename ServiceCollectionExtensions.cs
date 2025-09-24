@@ -36,6 +36,7 @@
 
             services.AddSingleton<IWecomOAuth2Service, WecomOAuth2Service>();
             services.AddSingleton<IWecomCallBackService, WecomCallBackService>();
+            services.AddSingleton<IWecomMessageService, WecomMessageService>();
             services.TryAddSingleton<IWecomFactory, WecomFactory>();
 
             //执行自动刷新
@@ -115,6 +116,20 @@
                     logger,
                     httpFactory,
                     Options.Create(optionsMonitor.Get(name)));
+            });
+
+
+            services.AddKeyedSingleton<IWecomMessageService, WecomMessageService>(name, (sp, _) =>
+            {
+                var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
+                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                var wecomFactory = sp.GetRequiredService<IWecomFactory>();
+                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
+                return new WecomMessageService(
+                    logger,
+                    sp,
+                    name,
+                    httpFactory);
             });
 
 

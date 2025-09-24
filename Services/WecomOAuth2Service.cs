@@ -38,6 +38,15 @@
             return _memoryCache.Get<string>(CacheKey("ticket"));
         }
 
+        /// <summary>
+        /// 获取配置
+        /// </summary>
+        /// <returns></returns>
+        public Models.Config GetConfig()
+        {
+            return _options.Value;
+        }
+
 
         /// <summary>
         /// 获取jsapi-dto

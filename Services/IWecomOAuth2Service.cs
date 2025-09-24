@@ -3,6 +3,7 @@ namespace DreamSlave.Wecom.Services
 {
     public interface IWecomOAuth2Service
     {
+        Models.Config GetConfig();
         string BuildOAuth2Url(string url, string state);
         string BuildWebLoginUrl(string url, string state);
         JsapiTicketDto GetJsapiTicketDto(string url);
