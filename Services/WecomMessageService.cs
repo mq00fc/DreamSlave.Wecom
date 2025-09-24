@@ -8,19 +8,15 @@
         private readonly ILogger<WecomMessageService> _logger;
         private readonly IWecomOAuth2Service _wecomOAuth2Service;
         private readonly IHttpClientFactory _httpClientFactory;
-        private readonly IServiceProvider _serviceProvider;
-        private readonly string _instanceName;
+
         public WecomMessageService(
             ILogger<WecomMessageService> logger,
-            IServiceProvider provider,
-            string instanceName,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            IWecomOAuth2Service wecomOAuth2Service)
         {
             _logger = logger;
-            _instanceName = instanceName ?? "default";
-            _serviceProvider = provider;
-            _wecomOAuth2Service = _serviceProvider.GetRequiredKeyedService<IWecomOAuth2Service>(instanceName);
             _httpClientFactory = httpClientFactory;
+            _wecomOAuth2Service = wecomOAuth2Service;
         }
 
         /// <summary>
@@ -47,9 +43,6 @@
         /// <summary>
         /// 发送文本消息给指定的用户
         /// </summary>
-        /// <param name="content"></param>
-        /// <param name="userIds"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendTextMessageAsync(string content, params string[] userIds)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -70,9 +63,6 @@
         /// <summary>
         /// 发送markdown消息给指定的用户
         /// </summary>
-        /// <param name="content"></param>
-        /// <param name="userIds"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendMarkDownMessageAsync(string content, params string[] userIds)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -90,13 +80,9 @@
             return await SendMessageRequestAsync(model);
         }
 
-
         /// <summary>
         /// 发送文本消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageContent"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendTextMessageAsync(MessageBase messageBase, MessageContent messageContent)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -118,9 +104,6 @@
         /// <summary>
         /// 发送markdown消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageContent"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendMarkDownMessageAsync(MessageBase messageBase, MessageContent messageContent)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -142,9 +125,6 @@
         /// <summary>
         /// 发送图片消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageFile"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendImageMessageAsync(MessageBase messageBase, MessageFile messageFile)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -166,9 +146,6 @@
         /// <summary>
         /// 发送语音消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageFile"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendVoiceMessageAsync(MessageBase messageBase, MessageFile messageFile)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -190,9 +167,6 @@
         /// <summary>
         /// 发送视频消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageVideo"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendVideoMessageAsync(MessageBase messageBase, MessageVideo messageVideo)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -211,13 +185,9 @@
             return await SendMessageRequestAsync(model);
         }
 
-
         /// <summary>
         /// 发送文本卡片消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageTextCard"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendTextCardMessageAsync(MessageBase messageBase, MessageTextCard messageTextCard)
         {
             var config = _wecomOAuth2Service.GetConfig();
@@ -236,13 +206,9 @@
             return await SendMessageRequestAsync(model);
         }
 
-
         /// <summary>
         /// 发送图文消息
         /// </summary>
-        /// <param name="messageBase"></param>
-        /// <param name="messageNews"></param>
-        /// <returns></returns>
         public async Task<SendMessageResponse> SendNewsMessageAsync(MessageBase messageBase, MessageNews messageNews)
         {
             var config = _wecomOAuth2Service.GetConfig();

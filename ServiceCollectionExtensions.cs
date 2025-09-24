@@ -1,4 +1,7 @@
-﻿namespace DreamSlave.Wecom
+﻿using System.Globalization;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace DreamSlave.Wecom
 {
     public static class ServiceCollectionExtensions
     {
@@ -36,7 +39,14 @@
 
             services.AddSingleton<IWecomOAuth2Service, WecomOAuth2Service>();
             services.AddSingleton<IWecomCallBackService, WecomCallBackService>();
-            services.AddSingleton<IWecomMessageService, WecomMessageService>();
+            services.AddSingleton<IWecomMessageService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
+                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
+                var oauth2 = sp.GetRequiredService<IWecomOAuth2Service>();
+                return new WecomMessageService(logger, httpFactory, oauth2);
+            });
+
             services.TryAddSingleton<IWecomFactory, WecomFactory>();
 
             //执行自动刷新
@@ -67,7 +77,6 @@
 
             services.AddMemoryCache();
 
-            // 为该名称注册独立的配置实例
             services.AddOptions<Models.Config>(name)
                     .Configure(configure)
                     .ValidateOnStart();
@@ -123,13 +132,8 @@
             {
                 var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
                 var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var wecomFactory = sp.GetRequiredService<IWecomFactory>();
-                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                return new WecomMessageService(
-                    logger,
-                    sp,
-                    name,
-                    httpFactory);
+                var oauth2 = sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
+                return new WecomMessageService(logger, httpFactory, oauth2);
             });
 
 
