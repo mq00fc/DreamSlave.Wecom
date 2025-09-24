@@ -287,7 +287,7 @@ namespace DreamSlave.Wecom.Services
                 AppId = _options.Value.CorpID,
                 LoginType = "CorpApp",
                 Lang = "zh",
-                RedirectUri = HttpUtility.UrlEncode(url),
+                RedirectUri = url,
                 State = state
             };
         }
