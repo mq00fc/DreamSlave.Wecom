@@ -12,6 +12,7 @@ namespace DreamSlave.Wecom.Services
         string GetTicket();
         string GetToken();
         Task<WebLoginUserInfo> GetWebLoginUserInfoAsync(string code);
+        WebLoginDto BuildWebLoginDto(string url, string state);
         Task<WecomAccessToken> RefreshAccessTokenAsync();
         Task<WecomJsapiTicket> RefreshJsApiTicketAsync();
     }

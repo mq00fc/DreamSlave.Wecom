@@ -33,7 +33,7 @@
         /// <returns></returns>
         private async Task<bool> SendRequestAsync(object obj)
         {
-            using var client = _httpClientFactory.CreateClient("wecom_bot");
+            using var client = _httpClientFactory.CreateClient("wecom_client");
             try
             {
                 var json = JsonSerializer.Serialize(obj);
@@ -207,7 +207,7 @@
             }
 
             var url = $"https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key={_botKey}&type=file";
-            using var client = _httpClientFactory.CreateClient("wecom_bot");
+            using var client = _httpClientFactory.CreateClient("wecom_client");
 
             try
             {

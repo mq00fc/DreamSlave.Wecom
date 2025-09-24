@@ -9,5 +9,6 @@ namespace DreamSlave.Wecom.Services
         IWecomCallBackService GetCallback(string name);
         IWecomBotService GetBotService(string name);
         IWecomMessageService GetMessageService(string name);
+        WecomCommandExecService GetCommandExec(string name);
     }
 }

@@ -1,4 +1,6 @@
-﻿namespace DreamSlave.Wecom.Services
+﻿using System.Web;
+
+namespace DreamSlave.Wecom.Services
 {
     public class WecomOAuth2Service : IWecomOAuth2Service
     {
@@ -126,6 +128,10 @@
                 return null;
             }
             var model = JsonSerializer.Deserialize<WecomAccessToken>(content);
+            if (model?.Errcode != 0 && _options.Value.EnableLog)
+            {
+                _logger.LogError("[wecom]获取access_token失败:{0}", content);
+            }
             //如果不为null则增加到内存缓存中
             if (!string.IsNullOrEmpty(model?.AccessToken))
             {
@@ -157,6 +163,10 @@
                 return null;
             }
             var model = JsonSerializer.Deserialize<WecomJsapiTicket>(content);
+            if(model?.Errcode != 0 && _options.Value.EnableLog)
+            {
+                _logger.LogError("[wecom]获取jsapi-ticket失败:{0}", content);
+            }
             //如果不为null则增加到内存缓存中
             if (!string.IsNullOrEmpty(model?.Ticket))
             {
@@ -206,6 +216,10 @@
                 return null;
             }
             var model = JsonSerializer.Deserialize<OAuth2UserInfo>(content);
+            if (model?.Errcode != 0 && _options.Value.EnableLog)
+            {
+                _logger.LogError("[wecom]获取授权用户登陆身份失败:{0}", content);
+            }
             return model;
         }
 
@@ -227,6 +241,10 @@
                 return null;
             }
             var model = JsonSerializer.Deserialize<OAuth2UserDetail>(content);
+            if (model?.Errcode != 0 && _options.Value.EnableLog)
+            {
+                _logger.LogError("[wecom]获取用户敏感信息失败失败:{0}", content);
+            }
             return model;
         }
 
@@ -256,6 +274,25 @@
         }
 
         /// <summary>
+        /// 构建web登录前端需要参数
+        /// </summary>
+        /// <param name="url"></param>
+        /// <param name="state"></param>
+        /// <returns></returns>
+        public WebLoginDto BuildWebLoginDto(string url, string state)
+        {
+            return new WebLoginDto()
+            {
+                AgentId = _options.Value.AgentId,
+                AppId = _options.Value.CorpID,
+                LoginType = "CorpApp",
+                Lang = "zh",
+                RedirectUri = HttpUtility.UrlEncode(url),
+                State = state
+            };
+        }
+
+        /// <summary>
         /// 获取企业微信web登录的用户信息
         /// </summary>
         /// <param name="code"></param>
@@ -272,10 +309,12 @@
                 return null;
             }
             var model = JsonSerializer.Deserialize<WebLoginUserInfo>(content);
+            if (model?.Errcode != 0 && _options.Value.EnableLog)
+            {
+                _logger.LogError("[wecom]获取web登录用户身份失败:{0}", content);
+            }
             return model;
         }
         #endregion
-
-
     }
 }

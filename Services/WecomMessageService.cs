@@ -36,8 +36,12 @@
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
             using var result = await client.PostAsync(url, content);
             var reposeText = await result.Content.ReadAsStringAsync();
-            var respose = JsonSerializer.Deserialize<SendMessageResponse>(reposeText);
-            return respose;
+            var model = JsonSerializer.Deserialize<SendMessageResponse>(reposeText);
+            if (model?.Errcode != 0 && _wecomOAuth2Service.GetConfig().EnableLog)
+            {
+                _logger.LogError("[wecom]发送应用通知失败:{0}", content);
+            }
+            return model;
         }
 
         /// <summary>

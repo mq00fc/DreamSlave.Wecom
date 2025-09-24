@@ -1,208 +1,131 @@
-﻿using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
-
-namespace DreamSlave.Wecom
+﻿namespace DreamSlave.Wecom
 {
     public static class ServiceCollectionExtensions
     {
-        /// <summary>
-        /// 注入企业微信服务，单实例模式
-        /// </summary>
-        /// <param name="services"></param>
-        /// <param name="configure"></param>
-        /// <returns></returns>
-        public static IServiceCollection AddWecomService(this IServiceCollection services, Action<Models.Config> configure)
+        private static readonly object _initLock = new();
+        private static bool _multiHostAdded;
+        private static bool _clientAdded;
+        // 仅保存注册名称及其 AutoRefresh 标志，实例由 DI 延迟创建
+        private static readonly ConcurrentDictionary<string, bool> _registrations = new(StringComparer.OrdinalIgnoreCase);
+
+        internal static IEnumerable<(string Name, bool AutoRefresh)> GetRegistrations()
+            => _registrations.Select(kv => (kv.Key, kv.Value));
+
+        private static void EnsureWecomHttpClient(IServiceCollection services)
         {
-            services.AddMemoryCache();
-
-            services.AddOptions<Models.Config>()
-                    .Configure(configure)
-                    .ValidateOnStart();
-
-
-            //http客户端
-            services.AddHttpClient(name: "wecom_client", client =>
+            if (_clientAdded) return;
+            lock (_initLock)
             {
-                client.Timeout = TimeSpan.FromSeconds(3);
-                client.DefaultRequestHeaders.Add("User-Agent", "DreamSlave.Wecom");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                UseCookies = false,
-                AllowAutoRedirect = true,
-                //自动解码非常必要
-                AutomaticDecompression = DecompressionMethods.All,
-                MaxResponseHeadersLength = 1024,
-                MaxRequestContentBufferSize = 1024,
-                CheckCertificateRevocationList = true,
-                MaxConnectionsPerServer = 500,
-            });
-
-            services.AddSingleton<IWecomOAuth2Service, WecomOAuth2Service>();
-            services.AddSingleton<IWecomCallBackService, WecomCallBackService>();
-            services.AddSingleton<IWecomMessageService>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var oauth2 = sp.GetRequiredService<IWecomOAuth2Service>();
-                return new WecomMessageService(logger, httpFactory, oauth2);
-            });
-
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
-
-            //执行自动刷新
-            services.AddHostedService<WecomRefreshHostService>();
-
-            //注册单例服务并进行托管
-            services.AddSingleton<WecomCommandExecService>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomCommandExecService>>();
-                var opts = sp.GetRequiredService<IOptions<Models.Config>>();
-                var cb = sp.GetRequiredService<IWecomCallBackService>();
-                return new WecomCommandExecService(logger, opts, sp, cb, "default");
-            });
-
-            return services;
+                if (_clientAdded) return;
+                services.AddHttpClient("wecom_client", client =>
+                {
+                    client.Timeout = TimeSpan.FromSeconds(3);
+                    client.DefaultRequestHeaders.Add("User-Agent", "DreamSlave.Wecom");
+                }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    UseCookies = false,
+                    AllowAutoRedirect = true,
+                    AutomaticDecompression = DecompressionMethods.All,
+                    MaxResponseHeadersLength = 1024,
+#if !NET8_0_OR_GREATER && !NET9_0_OR_GREATER
+                    // 旧框架兼容属性可能不存在
+#else
+                    MaxRequestContentBufferSize = 1024,
+#endif
+                    CheckCertificateRevocationList = true,
+                    MaxConnectionsPerServer = 500,
+                });
+                _clientAdded = true;
+            }
         }
 
-        /// <summary>
-        /// 注入企业微信服务，支持多实例模式
-        /// 用法：
-        /// services.AddWecomService("appA", cfg => { ... });
-        /// services.AddWecomService("appB", cfg => { ... });
-        /// 注入：IWecomFactory.GetOAuth2("appA") / GetCallback("appA")，或 [FromKeyedServices("appA")] 按键注入。
-        /// </summary>
+        private static void EnsureMultiHost(IServiceCollection services)
+        {
+            if (_multiHostAdded) return;
+            lock (_initLock)
+            {
+                if (_multiHostAdded) return;
+                services.AddHostedService<DreamSlave.Wecom.Hosts.MultiWecomRefreshHostedService>();
+                _multiHostAdded = true;
+            }
+        }
+
+        public static IServiceCollection AddWecomService(this IServiceCollection services, Action<Models.Config> configure)
+            => AddWecomService(services, "default", configure);
+
         public static IServiceCollection AddWecomService(this IServiceCollection services, string name, Action<Models.Config> configure)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("name cannot be null or whitespace", nameof(name));
 
             services.AddMemoryCache();
+            services.AddOptions<Models.Config>(name).Configure(configure).ValidateOnStart();
+            var cfgTmp = new Models.Config();
+            configure(cfgTmp);
+            _registrations[name] = cfgTmp.AutoRefresh;
 
-            services.AddOptions<Models.Config>(name)
-                    .Configure(configure)
-                    .ValidateOnStart();
+            EnsureWecomHttpClient(services);
+            EnsureMultiHost(services);
 
-            // 从 configure 生成配置快照，用于条件注册
-            var cfgSnapshot = new Models.Config();
-            configure(cfgSnapshot);
-
-
-            // 确保 HttpClient 存在（共享同一个 wecom_client）
-            services.AddHttpClient(name: "wecom_client", client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(3);
-                client.DefaultRequestHeaders.Add("User-Agent", "DreamSlave.Wecom");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                UseCookies = false,
-                AllowAutoRedirect = true,
-                AutomaticDecompression = DecompressionMethods.All,
-                MaxResponseHeadersLength = 1024,
-                MaxRequestContentBufferSize = 1024,
-                CheckCertificateRevocationList = true,
-                MaxConnectionsPerServer = 500,
-            });
-
-            // 使用 KeyedService 注册，便于按名称解析
-            services.AddKeyedSingleton<IWecomOAuth2Service, WecomOAuth2Service>(name, (sp, _) =>
+            services.AddKeyedSingleton<IWecomOAuth2Service>(name, (sp, key) =>
             {
                 var logger = sp.GetRequiredService<ILogger<WecomOAuth2Service>>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                var memoryCache = sp.GetRequiredService<IMemoryCache>();
-                return new WecomOAuth2Service(
-                    logger,
-                    httpFactory,
-                    Options.Create(optionsMonitor.Get(name)),
-                    memoryCache);
+                var http = sp.GetRequiredService<IHttpClientFactory>();
+                var cache = sp.GetRequiredService<IMemoryCache>();
+                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
+                return new WecomOAuth2Service(logger, http, Options.Create(optMon.Get(name)), cache);
             });
+            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomOAuth2Service>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomOAuth2Service>(name, sp.GetRequiredKeyedService<IWecomOAuth2Service>(name)));
 
-            services.AddKeyedSingleton<IWecomCallBackService, WecomCallBackService>(name, (sp, _) =>
+            services.AddKeyedSingleton<IWecomCallBackService>(name, (sp, key) =>
             {
                 var logger = sp.GetRequiredService<ILogger<WecomCallBackService>>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                return new WecomCallBackService(
-                    logger,
-                    httpFactory,
-                    Options.Create(optionsMonitor.Get(name)));
+                var http = sp.GetRequiredService<IHttpClientFactory>();
+                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
+                return new WecomCallBackService(logger, http, Options.Create(optMon.Get(name)));
             });
+            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomCallBackService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomCallBackService>(name, sp.GetRequiredKeyedService<IWecomCallBackService>(name)));
 
-
-            services.AddKeyedSingleton<IWecomMessageService, WecomMessageService>(name, (sp, _) =>
+            services.AddKeyedSingleton<IWecomMessageService>(name, (sp, key) =>
             {
                 var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                var oauth2 = sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
-                return new WecomMessageService(logger, httpFactory, oauth2);
+                var oauth = sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
+                var http = sp.GetRequiredService<IHttpClientFactory>();
+                return new WecomMessageService(logger, http, oauth);
             });
+            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomMessageService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomMessageService>(name, sp.GetRequiredKeyedService<IWecomMessageService>(name)));
 
-
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
-
-            // 为该名称添加一个独立的后台刷新任务
-            services.AddHostedService(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomRefreshHostService>>();
-                var wecomSvc = sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
-                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                return new WecomRefreshHostService(
-                    logger,
-                    wecomSvc,
-                    Options.Create(optionsMonitor.Get(name)));
-            });
-
-
-            // 注册命令执行服务（按 name 隔离）并进行托管
-            services.AddKeyedSingleton<WecomCommandExecService>(name, (sp, _) =>
+            services.AddKeyedSingleton<WecomCommandExecService>(name, (sp, key) =>
             {
                 var logger = sp.GetRequiredService<ILogger<WecomCommandExecService>>();
-                var optionsMonitor = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                var callBackSvc = sp.GetRequiredKeyedService<IWecomCallBackService>(name);
-                return new WecomCommandExecService(
-                    logger,
-                    Options.Create(optionsMonitor.Get(name)),
-                    sp,
-                    callBackSvc,
-                    name);
+                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
+                var cb = sp.GetRequiredKeyedService<IWecomCallBackService>(name);
+                return new WecomCommandExecService(logger, Options.Create(optMon.Get(name)), sp, cb, name);
             });
-            services.AddHostedService(sp => sp.GetRequiredKeyedService<WecomCommandExecService>(name));
+            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<WecomCommandExecService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<WecomCommandExecService>(name, sp.GetRequiredKeyedService<WecomCommandExecService>(name)));
+
+            // 显式作为 IHostedService 注册，避免委托扩展可能的合并问题
+            services.AddSingleton<IHostedService>(sp => sp.GetRequiredKeyedService<WecomCommandExecService>(name));
+
+            services.TryAddSingleton<IWecomFactory, WecomFactory>();
             return services;
         }
 
-
-        /// <summary>
-        /// 注入企业微信机器人服务，支持多实例模式
-        /// </summary>
-        /// <param name="services"></param>
-        /// <param name="botName">机器人名称</param>
-        /// <param name="botKey">机器人url(仅需要?key=后的值)</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
         public static IServiceCollection AddWecomBot(this IServiceCollection services, string botName, string botKey)
         {
             if (string.IsNullOrWhiteSpace(botKey)) throw new ArgumentException("botKey cannot be null or whitespace", nameof(botKey));
             if (string.IsNullOrWhiteSpace(botName)) botName = "default";
-            // 确保 HttpClient 存在（共享同一个 wecom_bot）
-            services.AddHttpClient(name: "wecom_bot", client =>
-            {
-                client.Timeout = TimeSpan.FromSeconds(3);
-                client.DefaultRequestHeaders.Add("User-Agent", "DreamSlave.Wecom");
-            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
-            {
-                UseCookies = false,
-                AllowAutoRedirect = true,
-                AutomaticDecompression = DecompressionMethods.All,
-                MaxResponseHeadersLength = 1024,
-                MaxRequestContentBufferSize = 1024,
-                CheckCertificateRevocationList = true,
-                MaxConnectionsPerServer = 500,
-            });
-            services.AddKeyedSingleton<IWecomBotService, WecomBotService>(botName, (sp, _) =>
+
+            EnsureWecomHttpClient(services);
+
+            services.AddKeyedSingleton<IWecomBotService>(botName, (sp, key) =>
             {
                 var logger = sp.GetRequiredService<ILogger<WecomBotService>>();
-                var httpFactory = sp.GetRequiredService<IHttpClientFactory>();
-                return new WecomBotService(logger, httpFactory, botName, botKey);
+                var http = sp.GetRequiredService<IHttpClientFactory>();
+                return new WecomBotService(logger, http, botName, botKey);
             });
+            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomBotService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomBotService>(botName, sp.GetRequiredKeyedService<IWecomBotService>(botName)));
+
+            services.TryAddSingleton<IWecomFactory, WecomFactory>();
             return services;
         }
     }

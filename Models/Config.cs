@@ -31,5 +31,10 @@
         /// 自动刷新token和ticket，默认为true，为false时需要手动调用刷新方法
         /// </summary>
         public bool AutoRefresh { get; set; } = true;
+
+        /// <summary>
+        /// 启用日志,如果请求失败则显示错误日志
+        /// </summary>
+        public bool EnableLog { get; set; } = true;
     }
 }

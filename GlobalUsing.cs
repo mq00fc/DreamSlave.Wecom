@@ -13,6 +13,7 @@ global using Microsoft.Extensions.Caching.Memory;
 global using Microsoft.Extensions.Configuration;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.DependencyInjection.Extensions;
+global using System.Collections.Concurrent;
 
 global using DreamSlave.Wecom.Services;
 global using DreamSlave.Wecom.Models.Response;
