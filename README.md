@@ -1,290 +1,108 @@
-﻿## 企业微信相关方法封装
+﻿## 企业微信相关方法封装 (统一服务版本)
 
-### 使用说明
+### 状态
+当前为预览版，仅用于实验/学习，勿直接用于生产。
 
-本仓库目前为预览版，无任何使用保障，仅在部分项目中引用尚未发现任何问题，请勿用于生产环境
+### 功能
+- [x] AccessToken 获取 / 缓存(IMemoryCache)
+- [x] Jsapi Ticket 获取 / 缓存(IMemoryCache)
+- [x] 回调签名验证 / 加解密
+- [x] 回调消息解析 (文本/事件/扫码/批量任务/通讯录变更等)
+- [x] OAuth2 鉴权 & 用户基础/敏感信息
+- [x] Web 登录鉴权
+- [x] 应用消息发送(文本/Markdown/图片/语音/视频/卡片/图文等)
 
+```
+IWecomUnifiedService
+```
 
+通过 serviceName 区分多实例，内部使用 IMemoryCache 保存 token / ticket。
 
-### 已实现的功能
-
-- [x] 企业微信Token
-- [x] 企业微信Js-ticket
-- [x] 企业微信加密回调解析
-- [x] 企业微信加密回调响应（仅限文本）
-- [x] 企业微信回调接口
-- [x] 获取企业授权用户登录身份
-- [x] 获取企业用户敏感身份信息
-- [x] 获取企业Web登录的用户信息
-- [x] 企业微信机器人（消息推送）
-- [x] 企业微信发送应用消息（文本、图片、文件、图文、视频、语音、卡片等）
-> [!NOTE]
->
-> 更多功能敬请期待
-
-
-
-### Token/Ticket处理方式
-
-当`cfg.AutoRefresh = true;`时，将在后台启动`BackgroundService`服务并在每60分钟自动刷新一次
-
-> [!CAUTION]
->
-> 由于未使用任何第三方库，所以采用了`IMemoryCache`即内存数据库，当每次程序重启时会自动刷新一次Token/Ticket，请注意遵守企业微信刷新规则限制，如有更高的需求请关闭自动刷新并自行实现此刷新逻辑（但是需要调用`RefreshAccessTokenAsync`和`RefreshJsApiTicketAsync`避免内部方法无法获取到Token的问题）
-
-
-
-
-### 使用教程->企业微信回调/鉴权
-
-该库提供了两种的注入方式方便使用者调用
-
-
-
-可从Nuget中下载[此库](https://www.nuget.org/packages/DreamSlave.Wecom) 
-
-> [!CAUTION]
->
-> 请勿使用1.1.1版本以前的版本
-
-
-
-
-
-#### 单一实例注入
-
-```C#
-builder.Services.AddWecomService(cfg =>
+### 注册方式
+```
+// 多实例按需调用多次
+builder.Services.AddWecomConfig("oauth2", cfg =>
 {
     cfg.CorpID = "企业微信Id";
     cfg.CorpSecret = "Secret";
     cfg.AgentId = 1000001;
     cfg.Token = "";
     cfg.EncodingAesKey = "";
-    cfg.AutoRefresh = true;
+    cfg.AutoRefresh = true; // 后台自动刷新
 });
 ```
 
-
-
-#### 多实例注入（类似于IHttpClientFactory）
-
-```C#
-builder.Services.AddWecomService("名称",cfg =>
-{
-    cfg.CorpID = "企业微信Id";
-    cfg.CorpSecret = "Secret";
-    cfg.AgentId = 1000001;
-    cfg.Token = "";
-    cfg.EncodingAesKey = "";
-    cfg.AutoRefresh = true;
-});
-
+### 获取 Js-SDK 签名
+```
+var dto = _wecom.GetJsapiTicketDto("oauth2", currentUrl);
 ```
 
-
-
-
-
-在不同的实例注入下，使用方法有着本质的区别请注意
-
-如果是单一实例，则直接注入`IWecomOAuth2Service`和`IWecomCallBackService`即可
-
-```C#
-private readonly ILogger<WecomController> _logger;
-private readonly IWecomOAuth2Service _wecomOauth2Service;
-private readonly IWecomCallBackService _wecomCallBackService;
-public WecomController(ILogger<WecomController> logger,
-     IWecomOAuth2Service wecomOAuth2Service,
-     IWecomCallBackService wecomCallBackService)
- {
-     _logger = logger;
-     _wecomCallBackService = wecomCallBackService;
-     _wecomOauth2Service = wecomOAuth2Service;
- }
+### OAuth2 鉴权
+```
+var authUrl = _wecom.BuildOAuth2Url("oauth2", callbackUrl, state);
+// 回调里
+var user = await _wecom.GetOAuth2UserInfoAsync("oauth2", code);
+var detail = await _wecom.GetOAuth2UserDetailAsync("oauth2", user);
 ```
 
-
-
-如果是多实例注入，则需要注入`IWecomFactory`然后获取指定名称的Service
-
-```C#
-private readonly ILogger<WecomController> _logger;
-private readonly IWecomOAuth2Service _wecomTokenService;
-private readonly IWecomFactory _wecomFactory;
-private readonly IWecomCallBackService _wecomCallBackService;
-private readonly IWecomCallBackService _addressCallBackService;
-public WecomController(ILogger<WecomController> logger,
-    IWecomFactory wecomFactory)
-{
-    _logger = logger;
-    _wecomFactory = wecomFactory;
-    _wecomCallBackService = _wecomFactory.GetCallback("oauth2");
-    _wecomTokenService = _wecomFactory.GetOAuth2("oauth2");
-    _addressCallBackService = _wecomFactory.GetCallback("adress");
-}
+### Web 登录
+```
+var loginUrl = _wecom.BuildWebLoginUrl("oauth2", callbackUrl, state);
+var webUser = await _wecom.GetWebLoginUserInfoAsync("oauth2", code);
 ```
 
-
-
-
-
-#### 企业微信回调WebApi示例
-
-```C#
-/// <summary>
-/// 企业微信签名回调
-/// </summary>
-/// <param name="callback"></param>
-/// <returns></returns>
-[HttpGet("/api/wecom/callback")]
-public IActionResult GetCallBack([FromQuery] Callback callback)
+### 回调处理
+后台已自动注册 WecomCommandExecService (按实例 serviceName)。
+```
+[HttpGet("/api/wecom/callback")] // 检测签名
+public IActionResult Verify([FromQuery] Callback cb)
 {
-    var flag = _wecomCallBackService.CheckSignature(callback);
-    if (!flag)
-    {
-        return Content("签名不符合验证!", "text/plain", System.Text.Encoding.UTF8);
-    }
-
-    var data = _wecomCallBackService.DecryptEchostr(callback);
-    return Content(data, "text/plain", Encoding.UTF8);
+    if(!_wecom.CheckSignature("oauth2", cb)) return Content("签名错误");
+    return Content(_wecom.DecryptEchostr("oauth2", cb));
 }
 
-
-[HttpPost("/api/wecom/callback")]
-public async Task<IActionResult> PostCallBack([FromQuery] Callback callback)
+[HttpPost("/api/wecom/callback")] // 处理消息
+public async Task<IActionResult> Receive([FromQuery] Callback cb)
 {
     using var reader = new StreamReader(Request.Body);
     var payload = await reader.ReadToEndAsync();
-    var data = _wecomCallBackService.DecryptCallBackData(payload);
-    _logger.LogInformation("消息内容：{0}", data);
-	//这里的data需要自行处理
-    return Content(await _oauthExec.HandleMessageAsync(data), "text/plain", System.Text.Encoding.UTF8);
+    var xml = _wecom.DecryptCallBackData("oauth2", payload);
+    return Content(await _exec.HandleMessageAsync(xml));
 }
 ```
 
-
-
-这里的_oauthExec需要进行注入，如果是单实例注入则直接注入`WecomCommandExecService`即可
-
-为了方便测试，下面放两个使用示例，只需要按照下面的写法进行编写即可，库会自动扫描（反射）处理
-
-
-
-text内容
-
-```C#
+### 自定义指令/事件处理
+文本命令:
+```
 public class DeveloperHandler
 {
     [WecomTextCommand("id")]
-    public async Task<string> HandleOpenIdCommandAsync(IServiceProvider serviceProvider, MessageReceive messageReceive)
-    {
-        return await Task.FromResult("您好,您的企业微信Id为：" + messageReceive.fromUserName);
-    }
+    public Task<string> IdAsync(IServiceProvider sp, MessageReceive msg)
+        => Task.FromResult("您的ID:" + msg.fromUserName);
 }
 ```
-
-event内容
-
-```C#
+事件命令:
+```
 public class EventHandler
 {
-    [WecomEventCommand("enter_agent")]
-    public async Task<string> OnEnterAgent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您进入了{message.AgentId}");
-    }
-
-
-    [WecomEventCommand("location")]
-    public async Task<string> OnLocationEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您的位置是{message.Latitude}/{message.Longitude} {message.Precision}");
-    }
-
-
-    [WecomEventCommand("view")]
-    public async Task<string> OnViewEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您点击了<a href='{message.EventKey}'>菜单</a>");
-    }
-
-    [WecomEventCommand("click")]
-    public async Task <string> OnClickEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您点击了菜单 {message.EventKey}");
-    }
-
-
-    [WecomEventCommand("view_miniprogram")]
-    public async Task<string> OnViewMiniprogramEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您点击了小程序 {message.EventKey}");
-    }
-
-
-    [WecomEventCommand("scancode_push")]
-    public async Task<string> OnScanCodePushEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您扫码了 {message.ScanCodeInfo.ScanResult}");
-    }
-
-    [WecomEventCommand("scancode_waitmsg")]
-    public async Task<string> OnScanCodeWaitMsgEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"您扫码了 {message.ScanCodeInfo.ScanResult}");
-    }
-
-
-
-    [WecomEventCommand("change_contact")]
-    public async Task<string> OnChangeContactEvent(IServiceProvider provider, MessageReceive message)
-    {   
-        return await Task.FromResult($"通讯录变更事件 {message.ChangeType}");
-    }
-
-
-    [WecomEventCommand("batch_job_result")]
-    public async Task<string> OnBatchJobResultEvent(IServiceProvider provider, MessageReceive message)
-    {
-        return await Task.FromResult($"批量任务结果 {message.BatchJob.JobId} {message.BatchJob.JobType}");
-    }
+    [WecomEventCommand("enter_agent")] public Task<string> EnterAsync(IServiceProvider sp, MessageReceive m) => Task.FromResult("进入应用:"+m.AgentId);
 }
 ```
-
-
-
-### 使用教程-机器人推送
-
-在`Program.cs`中添加下列代码，可以添加多个机器人只需要修改name即可
-
-> [!IMPORTANT]
->
-> 机器人推送除了`模板卡片类型`，其余所有类型都已内建支持，另外机器人推送的返回参数只告知是否成功会忽略其他的信息
-
-
-
-```C#
-builder.Services.AddWecomBot("运维机器人", "3297fdf1-baf5-4da7-b6ca-68bfa7f65af4");
+支持作用域过滤:
+```
+[WecomHandlerScope("oauth2")] // 仅在 oauth2 实例生效
 ```
 
-
-
-然后在接口或者实现的服务中进行下列操作
-
-```C#
-private readonly IWecomBotService _wecomBotService;
-public WecomController(ILogger<WecomController> logger,
-    [FromKeyedServices("运维机器人")] IWecomBotService wecomBotService)
-{
-    _logger = logger;
-    _wecomBotService = wecomBotService;
-}
+### 发送消息
+```
+await _wecom.SendTextMessageAsync("oauth2", "测试", "UserA");
 ```
 
-最后调用方法即可
+### 自动刷新
+当配置 AutoRefresh=true，会启动后台刷新服务：
+- AccessToken 提前 1 分钟过期续订
+- JsapiTicket 需自行按需调用刷新 (或调用 GetJsapiTicketDto 前确保已刷新)
 
-```C#
-var flag = await _wecomBotService.SendTextMessageToBotAsync(keyword);
-```
+### 免责声明
+仅供学习/测试，不对稳定性与合规性负责。
 

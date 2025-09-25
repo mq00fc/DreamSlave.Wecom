@@ -1,4 +1,4 @@
-﻿
+
 namespace DreamSlave.Wecom.Services
 {
     public interface IWecomBotService

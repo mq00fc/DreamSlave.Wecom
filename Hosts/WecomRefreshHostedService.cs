@@ -1,34 +1,30 @@
-using System.Collections.Concurrent;
-
 namespace DreamSlave.Wecom.Hosts
 {
     /// <summary>
     /// 统一管理多个企业微信实例刷新任务（基于 keyed 服务动态解析）
     /// </summary>
-    internal sealed class MultiWecomRefreshHostedService : BackgroundService
+    internal sealed class WecomRefreshHostedService : BackgroundService
     {
-        private readonly ILogger<MultiWecomRefreshHostedService> _logger;
-        private readonly IServiceProvider _sp;
-        private readonly ConcurrentDictionary<string, Task> _runningTasks = new(StringComparer.OrdinalIgnoreCase);
+        private readonly ILogger<WecomRefreshHostedService> _logger;
+        private readonly IWecomUnifiedService _unified;
+        private readonly ConcurrentDictionary<string, Task> _running = new(StringComparer.OrdinalIgnoreCase);
 
-        public MultiWecomRefreshHostedService(
-            ILogger<MultiWecomRefreshHostedService> logger,
-            IServiceProvider sp)
+        public WecomRefreshHostedService(ILogger<WecomRefreshHostedService> logger,
+            IWecomUnifiedService unified)
         {
             _logger = logger;
-            _sp = sp;
+            _unified = unified;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // 从 ServiceCollectionExtensions 的静态注册表获取实例信息
+            // 旧的 ServiceCollectionExtensions.GetRegistrations 仍返回 AutoRefresh 信息
             var regs = ServiceCollectionExtensions.GetRegistrations().ToList();
             if (regs.Count == 0)
             {
                 _logger.LogInformation("[multi] 未发现任何 WeCom 实例，刷新服务空闲");
                 return Task.CompletedTask;
             }
-
             foreach (var reg in regs)
             {
                 if (!reg.AutoRefresh)
@@ -36,42 +32,34 @@ namespace DreamSlave.Wecom.Hosts
                     _logger.LogInformation("[multi:{Name}] AutoRefresh=false 跳过", reg.Name);
                     continue;
                 }
-                var task = Task.Run(() => RunInstanceLoopAsync(reg.Name, stoppingToken), stoppingToken);
-                _runningTasks[reg.Name] = task;
+                _running[reg.Name] = Task.Run(() => LoopAsync(reg.Name, stoppingToken), stoppingToken);
             }
-            return Task.WhenAll(_runningTasks.Values);
+            return Task.WhenAll(_running.Values);
         }
 
-        private async Task RunInstanceLoopAsync(string name, CancellationToken token)
+        private async Task LoopAsync(string serviceName, CancellationToken token)
         {
-            IWecomOAuth2Service oauth;
-            try
+            var cfg = _unified.GetConfig(serviceName);
+            if (cfg == null)
             {
-                oauth = _sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "[multi:{Name}] 未找到对应的 OAuth2 服务，退出刷新循环", name);
+                _logger.LogWarning("[multi:{Name}] 未找到配置，退出", serviceName);
                 return;
             }
-
-            var config = oauth.GetConfig();
             var safety = TimeSpan.FromMinutes(5);
             var retryDelay = TimeSpan.FromSeconds(10);
             var maxRetryDelay = TimeSpan.FromMinutes(5);
             var maxInterval = TimeSpan.FromHours(1);
-            _logger.LogInformation("[multi:{Name}] 刷新循环启动 (CorpID={CorpID}, AgentId={AgentId})", name, config.CorpID, config.AgentId);
+            _logger.LogInformation("[multi:{Name}] 刷新循环启动 (CorpID={CorpID}, AgentId={AgentId})", serviceName, cfg.CorpID, cfg.AgentId);
 
-            // 立即预热
             try
             {
-                var t = await oauth.RefreshAccessTokenAsync();
+                var t = await _unified.RefreshAccessTokenAsync(serviceName);
                 if (t == null)
-                    _logger.LogWarning("[multi:{Name}] 预热 AccessToken 失败", name);
+                    _logger.LogWarning("[multi:{Name}] 预热 AccessToken 失败", serviceName);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[multi:{Name}] 预热异常", name);
+                _logger.LogError(ex, "[multi:{Name}] 预热异常", serviceName);
             }
 
             while (!token.IsCancellationRequested)
@@ -79,28 +67,24 @@ namespace DreamSlave.Wecom.Hosts
                 TimeSpan nextDelay;
                 try
                 {
-                    var accessToken = await oauth.RefreshAccessTokenAsync();
+                    var accessToken = await _unified.RefreshAccessTokenAsync(serviceName);
                     if (accessToken == null || accessToken.Errcode != 0 || string.IsNullOrEmpty(accessToken.AccessToken))
                     {
-                        _logger.LogWarning("[multi:{Name}] AccessToken 刷新失败，{Delay}s 后重试", name, retryDelay.TotalSeconds);
+                        _logger.LogWarning("[multi:{Name}] AccessToken 刷新失败，{Delay}s 后重试", serviceName, retryDelay.TotalSeconds);
                         nextDelay = retryDelay;
                         retryDelay = TimeSpan.FromMilliseconds(Math.Min(retryDelay.TotalMilliseconds * 2, maxRetryDelay.TotalMilliseconds));
                         goto Delay;
                     }
-
                     var accessExpire = TimeSpan.FromSeconds(Math.Max(accessToken.ExpiresIn, 60));
                     nextDelay = accessExpire > safety ? accessExpire - safety : TimeSpan.FromMinutes(1);
                     if (nextDelay > maxInterval) nextDelay = maxInterval;
                     retryDelay = TimeSpan.FromSeconds(10);
-                    _logger.LogInformation("[multi:{Name}] 刷新成功，下次 {Minutes} 分钟后 (rawMin={RawMin}s)", name, Math.Round(nextDelay.TotalMinutes, 2), (int)accessExpire.TotalSeconds);
+                    _logger.LogInformation("[multi:{Name}] 刷新成功，下次 {Minutes} 分钟后 (rawMin={RawMin}s)", serviceName, Math.Round(nextDelay.TotalMinutes, 2), (int)accessExpire.TotalSeconds);
                 }
-                catch (OperationCanceledException) when (token.IsCancellationRequested)
-                {
-                    break;
-                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "[multi:{Name}] 刷新异常，{Delay}s 后重试", name, retryDelay.TotalSeconds);
+                    _logger.LogError(ex, "[multi:{Name}] 刷新异常，{Delay}s 后重试", serviceName, retryDelay.TotalSeconds);
                     nextDelay = retryDelay;
                     retryDelay = TimeSpan.FromMilliseconds(Math.Min(retryDelay.TotalMilliseconds * 2, maxRetryDelay.TotalMilliseconds));
                 }
@@ -108,7 +92,7 @@ namespace DreamSlave.Wecom.Hosts
                 if (nextDelay <= TimeSpan.Zero) nextDelay = TimeSpan.FromMinutes(1);
                 try { await Task.Delay(nextDelay, token); } catch { break; }
             }
-            _logger.LogInformation("[multi:{Name}] 刷新循环结束", name);
+            _logger.LogInformation("[multi:{Name}] 刷新循环结束", serviceName);
         }
     }
 }

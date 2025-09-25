@@ -1,7 +1,7 @@
-ï»¿namespace DreamSlave.Wecom.Services
+namespace DreamSlave.Wecom.Services
 {
     /// <summary>
-    /// ä¼ä¸šå¾®ä¿¡æœºå™¨äººæœåŠ¡
+    /// ÆóÒµÎ¢ĞÅ»úÆ÷ÈË·şÎñ
     /// </summary>
     /// <remarks>
     /// https://developer.work.weixin.qq.com/document/path/99110
@@ -27,7 +27,7 @@
         }
 
         /// <summary>
-        /// å‘é€è¯·æ±‚
+        /// ·¢ËÍÇëÇó
         /// </summary>
         /// <param name="obj"></param>
         /// <returns></returns>
@@ -43,7 +43,7 @@
 
                 if (!resp.IsSuccessStatusCode)
                 {
-                    _logger.LogError("[{Bot}] å‘é€å¤±è´¥: HTTP {Status} {Body}", _botName ?? "default", (int)resp.StatusCode, body);
+                    _logger.LogError("[{Bot}] ·¢ËÍÊ§°Ü: HTTP {Status} {Body}", _botName ?? "default", (int)resp.StatusCode, body);
                     return false;
                 }
 
@@ -58,30 +58,30 @@
                     {
                         return true;
                     }
-                    _logger.LogError("[{Bot}] å‘é€å¤±è´¥: errcode={Errcode}, errmsg={Errmsg}", _botName ?? "default", errcode, errmsg);
+                    _logger.LogError("[{Bot}] ·¢ËÍÊ§°Ü: errcode={Errcode}, errmsg={Errmsg}", _botName ?? "default", errcode, errmsg);
                     return false;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "[{Bot}] å‘é€å¤±è´¥: å“åº”è§£æå¼‚å¸¸: {Body}", _botName ?? "default", body);
+                    _logger.LogError(ex, "[{Bot}] ·¢ËÍÊ§°Ü: ÏìÓ¦½âÎöÒì³£: {Body}", _botName ?? "default", body);
                     return false;
                 }
             }
             catch (TaskCanceledException ex)
             {
-                _logger.LogError(ex, "[{Bot}] å‘é€å¤±è´¥: è¯·æ±‚è¶…æ—¶", _botName ?? "default");
+                _logger.LogError(ex, "[{Bot}] ·¢ËÍÊ§°Ü: ÇëÇó³¬Ê±", _botName ?? "default");
                 return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[{Bot}] å‘é€å¤±è´¥: æœªçŸ¥é”™è¯¯", _botName ?? "default");
+                _logger.LogError(ex, "[{Bot}] ·¢ËÍÊ§°Ü: Î´Öª´íÎó", _botName ?? "default");
                 return false;
             }
         }
 
 
         /// <summary>
-        /// å‘é€æ™®é€šæ–‡æœ¬æ¶ˆæ¯
+        /// ·¢ËÍÆÕÍ¨ÎÄ±¾ÏûÏ¢
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
@@ -99,7 +99,7 @@
         }
 
         /// <summary>
-        /// å‘é€mdæ¶ˆæ¯
+        /// ·¢ËÍmdÏûÏ¢
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
@@ -118,7 +118,7 @@
 
 
         /// <summary>
-        /// å‘é€mdv2æ¶ˆæ¯
+        /// ·¢ËÍmdv2ÏûÏ¢
         /// </summary>
         /// <param name="text"></param>
         /// <returns></returns>
@@ -137,10 +137,10 @@
 
 
         /// <summary>
-        /// å‘é€å›¾ç‰‡ç»™æœºå™¨äºº
+        /// ·¢ËÍÍ¼Æ¬¸ø»úÆ÷ÈË
         /// </summary>
-        /// <param name="fileBase64">æ–‡ä»¶base64ç¼–ç </param>
-        /// <param name="md5">å›¾ç‰‡å†…å®¹ï¼ˆbase64ç¼–ç å‰ï¼‰çš„md5å€¼</param>
+        /// <param name="fileBase64">ÎÄ¼şbase64±àÂë</param>
+        /// <param name="md5">Í¼Æ¬ÄÚÈİ£¨base64±àÂëÇ°£©µÄmd5Öµ</param>
         /// <returns></returns>
         public async Task<bool> SendImageToBotAsync(string fileBase64, string md5)
         {
@@ -158,7 +158,7 @@
 
 
         /// <summary>
-        /// å‘é€æ–‡ä»¶ç»™æœºå™¨äºº
+        /// ·¢ËÍÎÄ¼ş¸ø»úÆ÷ÈË
         /// </summary>
         /// <param name="mediaId"></param>
         /// <returns></returns>
@@ -176,7 +176,7 @@
         }
 
         /// <summary>
-        /// å‘é€å›¾æ–‡æ¶ˆæ¯
+        /// ·¢ËÍÍ¼ÎÄÏûÏ¢
         /// </summary>
         /// <param name="articles"></param>
         /// <returns></returns>
@@ -195,10 +195,10 @@
         }
 
         /// <summary>
-        /// é€šè¿‡ Webhook ä¸Šä¼ æ–‡ä»¶ï¼ŒæˆåŠŸè¿”å› media_idï¼Œå¤±è´¥è¿”å›ç©ºå­—ç¬¦ä¸²
+        /// Í¨¹ı Webhook ÉÏ´«ÎÄ¼ş£¬³É¹¦·µ»Ø media_id£¬Ê§°Ü·µ»Ø¿Õ×Ö·û´®
         /// </summary>
-        /// <param name="fileBytes">æ–‡ä»¶äºŒè¿›åˆ¶å†…å®¹</param>
-        /// <param name="fileName">æ–‡ä»¶å</param>
+        /// <param name="fileBytes">ÎÄ¼ş¶ş½øÖÆÄÚÈİ</param>
+        /// <param name="fileName">ÎÄ¼şÃû</param>
         public async Task<string> UploadFileToBotAsync(byte[] fileBytes, string fileName)
         {
             if (string.IsNullOrWhiteSpace(fileName))
@@ -214,7 +214,7 @@
                 using MultipartFormDataContent form = new();
                 using ByteArrayContent fileContent = new(fileBytes);
                 fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
-                // name å¿…é¡»ä¸º media
+                // name ±ØĞëÎª media
                 form.Add(fileContent, "media", fileName);
 
                 using var resp = await client.PostAsync(url, form).ConfigureAwait(false);
@@ -222,7 +222,7 @@
 
                 if (!resp.IsSuccessStatusCode)
                 {
-                    _logger.LogError("[{Bot}] ä¸Šä¼ å¤±è´¥: HTTP {Status} {Body}", _botName ?? "default", (int)resp.StatusCode, body);
+                    _logger.LogError("[{Bot}] ÉÏ´«Ê§°Ü: HTTP {Status} {Body}", _botName ?? "default", (int)resp.StatusCode, body);
                     return string.Empty;
                 }
 
@@ -239,18 +239,18 @@
                         return mediaId;
                     }
 
-                    _logger.LogError("[{Bot}] ä¸Šä¼ å¤±è´¥: errcode={Errcode}, errmsg={Errmsg}", _botName ?? "default", errcode, errmsg);
+                    _logger.LogError("[{Bot}] ÉÏ´«Ê§°Ü: errcode={Errcode}, errmsg={Errmsg}", _botName ?? "default", errcode, errmsg);
                     return string.Empty;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "[{Bot}] ä¸Šä¼ å¤±è´¥: å“åº”è§£æå¼‚å¸¸: {Body}", _botName ?? "default", body);
+                    _logger.LogError(ex, "[{Bot}] ÉÏ´«Ê§°Ü: ÏìÓ¦½âÎöÒì³£: {Body}", _botName ?? "default", body);
                     return string.Empty;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "[{Bot}] ä¸Šä¼ å¤±è´¥: æœªçŸ¥é”™è¯¯", _botName ?? "default");
+                _logger.LogError(ex, "[{Bot}] ÉÏ´«Ê§°Ü: Î´Öª´íÎó", _botName ?? "default");
                 return string.Empty;
             }
         }

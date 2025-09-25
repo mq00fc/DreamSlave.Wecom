@@ -5,8 +5,8 @@
         private static readonly object _initLock = new();
         private static bool _multiHostAdded;
         private static bool _clientAdded;
-        // 仅保存注册名称及其 AutoRefresh 标志，实例由 DI 延迟创建
         private static readonly ConcurrentDictionary<string, bool> _registrations = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly ConcurrentDictionary<string, string> _botKeys = new(StringComparer.OrdinalIgnoreCase);
 
         internal static IEnumerable<(string Name, bool AutoRefresh)> GetRegistrations()
             => _registrations.Select(kv => (kv.Key, kv.Value));
@@ -45,87 +45,55 @@
             lock (_initLock)
             {
                 if (_multiHostAdded) return;
-                services.AddHostedService<DreamSlave.Wecom.Hosts.MultiWecomRefreshHostedService>();
+                services.AddHostedService<WecomRefreshHostedService>();
                 _multiHostAdded = true;
             }
         }
 
-        public static IServiceCollection AddWecomService(this IServiceCollection services, Action<Models.Config> configure)
-            => AddWecomService(services, "default", configure);
-
-        public static IServiceCollection AddWecomService(this IServiceCollection services, string name, Action<Models.Config> configure)
+        // 新的轻量注册：仅向统一服务添加配置，不再为每个实例创建一组 service 对象
+        public static IServiceCollection AddWecomConfig(this IServiceCollection services, string serviceName, Action<Models.Config> configure)
         {
-            if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("name cannot be null or whitespace", nameof(name));
+            if (string.IsNullOrWhiteSpace(serviceName)) serviceName = "default";
+            var cfg = new Models.Config();
+            configure(cfg);
+            DreamSlave.Wecom.Services.WecomUnifiedService.RegisterConfig(serviceName, cfg);
+            _registrations[serviceName] = cfg.AutoRefresh;
 
+            // 基础依赖只注册一次
             services.AddMemoryCache();
-            services.AddOptions<Models.Config>(name).Configure(configure).ValidateOnStart();
-            var cfgTmp = new Models.Config();
-            configure(cfgTmp);
-            _registrations[name] = cfgTmp.AutoRefresh;
-
             EnsureWecomHttpClient(services);
             EnsureMultiHost(services);
 
-            services.AddKeyedSingleton<IWecomOAuth2Service>(name, (sp, key) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomOAuth2Service>>();
-                var http = sp.GetRequiredService<IHttpClientFactory>();
-                var cache = sp.GetRequiredService<IMemoryCache>();
-                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                return new WecomOAuth2Service(logger, http, Options.Create(optMon.Get(name)), cache);
-            });
-            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomOAuth2Service>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomOAuth2Service>(name, sp.GetRequiredKeyedService<IWecomOAuth2Service>(name)));
+            // 统一服务单例（线程安全，多租户）
+            services.TryAddSingleton<IWecomUnifiedService, WecomUnifiedService>();
 
-            services.AddKeyedSingleton<IWecomCallBackService>(name, (sp, key) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomCallBackService>>();
-                var http = sp.GetRequiredService<IHttpClientFactory>();
-                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                return new WecomCallBackService(logger, http, Options.Create(optMon.Get(name)));
-            });
-            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomCallBackService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomCallBackService>(name, sp.GetRequiredKeyedService<IWecomCallBackService>(name)));
+            // Keyed 注册命令执行服务，供回调控制器解析
+            services.AddKeyedSingleton<Hosts.WecomCommandExecService>(serviceName, (sp, key) =>
+                new Hosts.WecomCommandExecService(
+                    sp.GetRequiredService<ILogger<Hosts.WecomCommandExecService>>(),
+                    sp.GetRequiredService<IWecomUnifiedService>(),
+                        sp,
+                    serviceName));
+            // 作为 IHostedService 启动
+            services.AddSingleton<IHostedService>(sp => sp.GetRequiredKeyedService<Hosts.WecomCommandExecService>(serviceName));
 
-            services.AddKeyedSingleton<IWecomMessageService>(name, (sp, key) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomMessageService>>();
-                var oauth = sp.GetRequiredKeyedService<IWecomOAuth2Service>(name);
-                var http = sp.GetRequiredService<IHttpClientFactory>();
-                return new WecomMessageService(logger, http, oauth);
-            });
-            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomMessageService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomMessageService>(name, sp.GetRequiredKeyedService<IWecomMessageService>(name)));
-
-            services.AddKeyedSingleton<WecomCommandExecService>(name, (sp, key) =>
-            {
-                var logger = sp.GetRequiredService<ILogger<WecomCommandExecService>>();
-                var optMon = sp.GetRequiredService<IOptionsMonitor<Models.Config>>();
-                var cb = sp.GetRequiredKeyedService<IWecomCallBackService>(name);
-                return new WecomCommandExecService(logger, Options.Create(optMon.Get(name)), sp, cb, name);
-            });
-            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<WecomCommandExecService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<WecomCommandExecService>(name, sp.GetRequiredKeyedService<WecomCommandExecService>(name)));
-
-            // 显式作为 IHostedService 注册，避免委托扩展可能的合并问题
-            services.AddSingleton<IHostedService>(sp => sp.GetRequiredKeyedService<WecomCommandExecService>(name));
-
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
             return services;
         }
 
-        public static IServiceCollection AddWecomBot(this IServiceCollection services, string botName, string botKey)
+        public static IServiceCollection AddWecomBot(this IServiceCollection services, string botName, string key)
         {
-            if (string.IsNullOrWhiteSpace(botKey)) throw new ArgumentException("botKey cannot be null or whitespace", nameof(botKey));
             if (string.IsNullOrWhiteSpace(botName)) botName = "default";
-
+            if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("key empty", nameof(key));
             EnsureWecomHttpClient(services);
-
-            services.AddKeyedSingleton<IWecomBotService>(botName, (sp, key) =>
+            _botKeys[botName] = key;
+            services.AddKeyedSingleton<IWecomBotService>(botName, (sp, k) => new WecomBotService(
+                sp.GetRequiredService<ILogger<WecomBotService>>(),
+                sp.GetRequiredService<IHttpClientFactory>(), botName, key));
+            // 默认桥接
+            if (botName.Equals("default", StringComparison.OrdinalIgnoreCase))
             {
-                var logger = sp.GetRequiredService<ILogger<WecomBotService>>();
-                var http = sp.GetRequiredService<IHttpClientFactory>();
-                return new WecomBotService(logger, http, botName, botKey);
-            });
-            services.AddSingleton<DreamSlave.Wecom.Hosts.IWecomNamed<IWecomBotService>>(sp => new DreamSlave.Wecom.Hosts.WecomNamed<IWecomBotService>(botName, sp.GetRequiredKeyedService<IWecomBotService>(botName)));
-
-            services.TryAddSingleton<IWecomFactory, WecomFactory>();
+                services.TryAddSingleton<IWecomBotService>(sp => sp.GetRequiredKeyedService<IWecomBotService>("default"));
+            }
             return services;
         }
     }
