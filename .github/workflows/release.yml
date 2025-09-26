@@ -4,7 +4,7 @@ on:
   push:
     tags:
       - 'v*'
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+\.[0-9]+'
 
 permissions:
   contents: write  # needed to create / update releases
@@ -24,16 +24,19 @@ jobs:
 
       - name: Extract version from tag
         id: tag
+        shell: bash
         run: |
-          ref="${GITHUB_REF##*/}"
-            # strip leading v if present
-          ver="${ref#v}"
-          echo "Version detected: $ver"
-          if [[ ! $ver =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-.]+)?$ ]]; then
+          set -euo pipefail
+          ref="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
+          ver="${ref#v}"          # strip leading v
+          ver="$(echo "$ver" | tr -d '\r' | xargs)"  # trim/clean
+          echo "Raw tag: '$ref'"
+          echo "Version detected: '$ver'"
+          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-.]+)?$ ]]; then
             echo "Tag $ref is not a valid semver" >&2
             exit 1
           fi
-          echo "version=$ver" >> $GITHUB_OUTPUT
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET SDKs (8 & 9)
         uses: actions/setup-dotnet@v4
@@ -86,12 +89,12 @@ jobs:
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts
-          path: |
-            artifacts/*.nupkg
-            artifacts/*.snupkg
-            publish-net8.tar.gz
-            publish-net9.tar.gz
+            name: build-artifacts
+            path: |
+              artifacts/*.nupkg
+              artifacts/*.snupkg
+              publish-net8.tar.gz
+              publish-net9.tar.gz
 
       - name: Create / Update GitHub Release
         uses: softprops/action-gh-release@v2
