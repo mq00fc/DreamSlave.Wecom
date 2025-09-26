@@ -1,0 +1,115 @@
+name: Publish NuGet & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write  # needed to create / update releases
+  packages: write
+
+env:
+  PROJECT_PATH: DreamSlave.Wecom/DreamSlave.Wecom.csproj
+  TEST_PROJECT: WecomTest/WecomTest.csproj
+
+jobs:
+  build-pack-publish:
+    name: Build, Pack, Publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: tag
+        run: |
+          ref="${GITHUB_REF##*/}"
+            # strip leading v if present
+          ver="${ref#v}"
+          echo "Version detected: $ver"
+          if [[ ! $ver =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-.]+)?$ ]]; then
+            echo "Tag $ref is not a valid semver" >&2
+            exit 1
+          fi
+          echo "version=$ver" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET SDKs (8 & 9)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            8.0.x
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --no-restore -c Release /p:ContinuousIntegrationBuild=true
+
+      - name: Pack Library
+        run: |
+          dotnet pack $PROJECT_PATH -c Release -o artifacts \
+            -p:PackageVersion=${{ steps.tag.outputs.version }} \
+            -p:Version=${{ steps.tag.outputs.version }} \
+            --no-build
+
+      - name: Publish NuGet Package
+        if: success()
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -z "$NUGET_API_KEY" ]; then
+            echo 'NUGET_API_KEY secret is missing' >&2 
+            exit 1
+          fi
+          for pkg in artifacts/*.nupkg; do
+            dotnet nuget push "$pkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+          for snupkg in artifacts/*.snupkg; do
+            dotnet nuget push "$snupkg" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate || true
+          done
+
+      - name: Publish Sample (net8.0)
+        run: dotnet publish $TEST_PROJECT -c Release -f net8.0 -o publish/net8 --no-build
+
+      - name: Publish Sample (net9.0)
+        run: dotnet publish $TEST_PROJECT -c Release -f net9.0 -o publish/net9 --no-build
+
+      - name: Archive publish outputs
+        run: |
+          tar -czf publish-net8.tar.gz -C publish/net8 .
+          tar -czf publish-net9.tar.gz -C publish/net9 .
+          echo "Artifacts prepared"
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+            publish-net8.tar.gz
+            publish-net9.tar.gz
+
+      - name: Create / Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ steps.tag.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.tag.outputs.version, '-') }}
+          files: |
+            artifacts/*.nupkg
+            artifacts/*.snupkg
+            publish-net8.tar.gz
+            publish-net9.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "Published version ${{ steps.tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          ls -1 artifacts >> $GITHUB_STEP_SUMMARY
