@@ -1,41 +1,68 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
-    <Description>企业微信相关方法封装</Description>
-    <PackageProjectUrl>https://github.com/mq00fc/DreamSlave.Wecom.git</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/mq00fc/DreamSlave.Wecom.git</RepositoryUrl>
-    <IncludeSymbols>True</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    <PackageTags>preview</PackageTags>
-    <PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-	<PackageReadmeFile>README.md</PackageReadmeFile>
-	<AssemblyVersion>1.5.0</AssemblyVersion>
-	<FileVersion>1.5.0</FileVersion>
-	<TargetFrameworks>net9.0;net8.0</TargetFrameworks>
-  </PropertyGroup>
+	<!-- 基础属性 -->
+	<PropertyGroup>
+		<TargetFrameworks>net9.0;net8.0</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <DebugType>embedded</DebugType>
-  </PropertyGroup>
+		<!-- 版本占位，CI (dotnet pack -p:Version=) 会覆盖 -->
+		<Version>0.0.0-local</Version>
+		<!-- 如果你希望保持程序集 ABI 稳定，只在大版本才改，可保留 AssemblyVersion -->
+		<AssemblyVersion>1.5.0.0</AssemblyVersion>
+		<FileVersion>1.5.0.0</FileVersion>
+		<!-- 可选：CI 覆盖时自动携带构建元信息 -->
+		<!-- <InformationalVersion>1.5.0+local</InformationalVersion> -->
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-    <DebugType>embedded</DebugType>
-  </PropertyGroup>
-	
-  <ItemGroup>
-	  <None Include="README.md" Pack="true" PackagePath="\" />
-  </ItemGroup>
+		<Description>企业微信相关方法封装</Description>
+		<PackageProjectUrl>https://github.com/mq00fc/DreamSlave.Wecom</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/mq00fc/DreamSlave.Wecom</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<PackageRequireLicenseAcceptance>False</PackageRequireLicenseAcceptance>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageTags>wecom;wechatwork;企业微信;dreamsalve</PackageTags>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.9" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.9" />
-  </ItemGroup>
+		<!-- 统一用工作流执行 dotnet pack，不在普通 build 时自动生成 -->
+		<GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+
+		<!-- 符号包与 Source Link 支持 -->
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+		<Deterministic>true</Deterministic>
+
+		<!-- 调试信息：默认所有配置生成 portable PDB -->
+		<DebugType>portable</DebugType>
+		<DebugSymbols>true</DebugSymbols>
+
+		<!-- 文档与分析（按需调节） -->
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<!-- 忽略缺少公开成员注释 (CS1591) 警告，可按需删除 -->
+		<NoWarn>1591</NoWarn>
+
+		<!-- 如需图标：取消注释并在项目根放置 icon.png -->
+		<!-- <PackageIcon>icon.png</PackageIcon> -->
+	</PropertyGroup>
+	<ItemGroup>
+		<!-- 确保 README 打包，PackagePath 为空表示放根目录 -->
+		<None Include="README.md" Pack="true" PackagePath="" />
+		<!-- 如有图标则同时：
+    <None Include="icon.png" Pack="true" PackagePath="" /> -->
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.Caching.Abstractions" Version="9.0.9" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.9" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.9" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.9" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.9" />
+	</ItemGroup>
 
 </Project>
