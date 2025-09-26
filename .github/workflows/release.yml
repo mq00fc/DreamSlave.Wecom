@@ -26,17 +26,17 @@ jobs:
         id: tag
         shell: bash
         run: |
-          set -euo pipefail
-          ref="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
-          ver="${ref#v}"          # strip leading v
-          ver="$(echo "$ver" | tr -d '\r' | xargs)"  # trim/clean
-          echo "Raw tag: '$ref'"
-          echo "Version detected: '$ver'"
-          if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-.]+)?$ ]]; then
+            set -euo pipefail
+            ref="${GITHUB_REF_NAME:-${GITHUB_REF##*/}}"
+            ver="${ref#v}"
+            ver="$(printf '%s' "$ver" | tr -d '\r' | sed 's/[^[:print:]]//g' | xargs)"
+            echo "Raw tag: '$ref'"
+            if ! echo "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-.]+)?$'; then
             echo "Tag $ref is not a valid semver" >&2
             exit 1
-          fi
-          echo "version=$ver" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Version detected: '$ver'"
+            echo "version=$ver" >> "$GITHUB_OUTPUT"
 
       - name: Setup .NET SDKs (8 & 9)
         uses: actions/setup-dotnet@v4
