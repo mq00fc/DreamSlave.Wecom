@@ -81,7 +81,15 @@
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            TryInitializeHandlers();
+            // 不阻塞主机启动：在后台线程中完成反射扫描与初始化
+            _ = Task.Run(() =>
+            {
+                try { TryInitializeHandlers(); }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "实例:{Service} 初始化命令处理器失败", _serviceName);
+                }
+            }, stoppingToken);
             return Task.CompletedTask;
         }
 
